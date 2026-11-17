@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 
 interface LoginScreenProps {
-    onLoginSuccess?: () => void;
+    onLoginSuccess?: (userName?: string) => void;
     onNavigateToRegister?: () => void;
 }
 
@@ -26,15 +26,17 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
     const [focusedInput, setFocusedInput] = useState<'email' | 'password' | null>(null);
 
     const handleLogin = () => {
-        if (!email || !password) {
+        if (!email.trim() || !password.trim()) {
             Alert.alert('알림', '이메일과 비밀번호를 모두 입력해주세요.');
             return;
         }
 
-        Alert.alert('성공', `${email}님 환영합니다!`);
-        if (onLoginSuccess) {
-            onLoginSuccess();
-        }
+        const displayName = email.includes('@') ? email.split('@')[0] : email.trim();
+        onLoginSuccess?.(displayName || '홍길동');
+    };
+
+    const handleGuestStart = () => {
+        onLoginSuccess?.('게스트');
     };
 
     return (
@@ -42,7 +44,7 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
             style={styles.container}
             behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-            <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+            <StatusBar barStyle="dark-content" backgroundColor="#F3F5F7" />
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
@@ -50,7 +52,6 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
                 bounces={false}
             >
                 <View style={styles.screenWrapper}>
-
                     {/* 1. 화면 정중앙 고정 로그인 영역 */}
                     <View style={styles.centerFormContainer}>
                         {/* 상단 인라인 브랜드 헤더 */}
@@ -74,7 +75,7 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
                                         focusedInput === 'email' && styles.inputFocused,
                                     ]}
                                     placeholder="example@roadtour.com"
-                                    placeholderTextColor="#A1A1AA"
+                                    placeholderTextColor="#94A3B8"
                                     value={email}
                                     onChangeText={setEmail}
                                     onFocus={() => setFocusedInput('email')}
@@ -92,12 +93,14 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
                                         focusedInput === 'password' && styles.inputFocused,
                                     ]}
                                     placeholder="비밀번호를 입력하세요"
-                                    placeholderTextColor="#A1A1AA"
+                                    placeholderTextColor="#94A3B8"
                                     value={password}
                                     onChangeText={setPassword}
                                     onFocus={() => setFocusedInput('password')}
                                     onBlur={() => setFocusedInput(null)}
                                     secureTextEntry
+                                    returnKeyType="done"
+                                    onSubmitEditing={handleLogin}
                                 />
                             </View>
 
@@ -118,7 +121,7 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
                             </View>
                         </View>
 
-                        {/* 소셜 간편 로그인 */}
+                        {/* 소셜 간편 로그인 & 바로 시작 */}
                         <View style={styles.socialSection}>
                             <View style={styles.socialDividerRow}>
                                 <View style={styles.dividerLine} />
@@ -127,19 +130,33 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
                             </View>
 
                             <View style={styles.socialIconRow}>
-                                {/* 🔥 진짜 카카오 말풍선 심볼 디자인 */}
-                                <TouchableOpacity style={[styles.socialCircleBtn, styles.kakaoCircle]} activeOpacity={0.85}>
+                                <TouchableOpacity
+                                    style={[styles.socialCircleBtn, styles.kakaoCircle]}
+                                    activeOpacity={0.85}
+                                    onPress={() => onLoginSuccess?.('카카오 회원')}
+                                >
                                     <View style={styles.kakaoBubbleWrapper}>
                                         <View style={styles.kakaoBubbleBody} />
                                         <View style={styles.kakaoBubbleTail} />
                                     </View>
                                 </TouchableOpacity>
 
-                                {/* 네이버 심볼 */}
-                                <TouchableOpacity style={[styles.socialCircleBtn, styles.naverCircle]} activeOpacity={0.85}>
+                                <TouchableOpacity
+                                    style={[styles.socialCircleBtn, styles.naverCircle]}
+                                    activeOpacity={0.85}
+                                    onPress={() => onLoginSuccess?.('네이버 회원')}
+                                >
                                     <Text style={styles.naverModernLogo}>N</Text>
                                 </TouchableOpacity>
                             </View>
+
+                            <TouchableOpacity
+                                style={styles.guestStartBtn}
+                                onPress={handleGuestStart}
+                                activeOpacity={0.75}
+                            >
+                                <Text style={styles.guestStartText}>로그인 없이 바로 시작하기 →</Text>
+                            </TouchableOpacity>
                         </View>
                     </View>
 
@@ -148,7 +165,6 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
                         <Text style={styles.footerBrandText}>THE PARK</Text>
                         <Text style={styles.footerCopyright}>© The Park Corp. All rights reserved.</Text>
                     </View>
-
                 </View>
             </ScrollView>
         </KeyboardAvoidingView>
@@ -158,7 +174,7 @@ export function LoginScreen({ onLoginSuccess, onNavigateToRegister }: LoginScree
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#FFFFFF',
+        backgroundColor: '#F3F5F7',
     },
     scrollContent: {
         flexGrow: 1,
@@ -172,16 +188,12 @@ const styles = StyleSheet.create({
         paddingBottom: 80,
         position: 'relative',
     },
-
-    // 1. 화면 정중앙 폼 컨테이너
     centerFormContainer: {
         width: '100%',
         maxWidth: 380,
         alignItems: 'center',
-        marginTop: -20,
+        marginTop: -12,
     },
-
-    // 헤더
     headerArea: {
         alignItems: 'center',
         marginBottom: 24,
@@ -216,15 +228,13 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         letterSpacing: -0.2,
     },
-
-    // 폼 카드
     cardForm: {
         width: '100%',
         backgroundColor: '#FFFFFF',
         borderRadius: 20,
         padding: 20,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
+        borderColor: '#E2E8F0',
         shadowColor: '#0F172A',
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.04,
@@ -293,8 +303,6 @@ const styles = StyleSheet.create({
         fontSize: 12,
         color: '#CBD5E1',
     },
-
-    // 소셜 로그인
     socialSection: {
         width: '100%',
         alignItems: 'center',
@@ -308,7 +316,7 @@ const styles = StyleSheet.create({
     dividerLine: {
         flex: 1,
         height: 1,
-        backgroundColor: '#F1F5F9',
+        backgroundColor: '#E2E8F0',
     },
     socialDividerText: {
         fontSize: 12,
@@ -329,8 +337,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-
-    // 🔥 정밀하게 재현된 카카오톡 말풍선 아이콘
     kakaoCircle: {
         backgroundColor: '#FEE500',
     },
@@ -360,7 +366,6 @@ const styles = StyleSheet.create({
         borderTopColor: '#191919',
         transform: [{ rotate: '15deg' }],
     },
-
     naverCircle: {
         backgroundColor: '#03CF5D',
     },
@@ -370,11 +375,19 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         letterSpacing: -0.5,
     },
-
-    // 2. 푸터
+    guestStartBtn: {
+        marginTop: 18,
+        paddingVertical: 8,
+        paddingHorizontal: 14,
+    },
+    guestStartText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#64748B',
+    },
     bottomAbsoluteFooter: {
         position: 'absolute',
-        bottom: 36,
+        bottom: 32,
         alignItems: 'center',
         width: '100%',
     },

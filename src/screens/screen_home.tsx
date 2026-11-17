@@ -26,9 +26,13 @@ const MOCK_RESULTS: AddressItem[] = [
         placeName: '광세족발 전민점',
         lat: '36.3982',
         lon: '127.4025',
+        phone: '042-861-1234',
         distance: '120m',
         distanceKm: 0.12,
         memo: '공동현관 #1234',
+        isOpen: true,
+        businessHours: '16:00 - 24:00 (라스트오더 23:20)',
+        closedDays: '매주 일요일 정기휴무',
         nearbyList: [
             {
                 id: 'wp_p1',
@@ -49,9 +53,13 @@ const MOCK_RESULTS: AddressItem[] = [
         placeName: '충남대학교병원',
         lat: '36.3168',
         lon: '127.4152',
+        phone: '1599-7123',
         distance: '2.4km',
         distanceKm: 2.4,
         memo: '본관 1층 접수처',
+        isOpen: true,
+        businessHours: '평일 08:30 - 17:30 (응급실 24시간)',
+        closedDays: '토·일·공휴일 외래 휴진',
         nearbyList: [
             {
                 id: 'wp_pm1',
@@ -72,8 +80,12 @@ const MOCK_RESULTS: AddressItem[] = [
         placeName: '스타벅스 유성온천역점',
         lat: '36.3538',
         lon: '127.3415',
+        phone: '1522-3232',
         distance: '4.1km',
         distanceKm: 4.1,
+        isOpen: true,
+        businessHours: '매일 07:00 - 22:00',
+        closedDays: '연중무휴',
         nearbyList: [
             {
                 id: 'wp_p2',
@@ -130,7 +142,7 @@ export function HomeScreen() {
         }
     };
 
-    // 앱 시작 시 저장된 목록 불러오기 (저장된 목록이 비어있으면 샘플 유지)
+    // 앱 시작 시 저장된 목록 불러오기
     useEffect(() => {
         const loadStorage = async () => {
             try {
@@ -168,7 +180,7 @@ export function HomeScreen() {
         triggerToast(isAlreadySaved ? '보관함에서 삭제되었습니다.' : '보관함에 저장되었습니다.');
     };
 
-    // 목적지/경유지 삭제 (화면 리스트에서 즉시 제거 및 다시 그리기)
+    // 목적지/경유지 개별 삭제
     const handleDeleteDestination = (id: string) => {
         const target = destinationList.find((item) => item.id === id);
         const nextList = destinationList.filter((item) => item.id !== id);
@@ -181,6 +193,15 @@ export function HomeScreen() {
         triggerToast(`'${target?.title || '목적지'}' 삭제 완료`);
     };
 
+    // 전체 비우기 (퇴근/새 동선 초기화)
+    const handleClearAllDestinations = () => {
+        if (destinationList.length === 0) return;
+        setDestinationList([]);
+        setSelectedIndex(null);
+        syncStorage([], savedIds);
+        triggerToast('목적지 리스트를 모두 비웠습니다.');
+    };
+
     // 샘플 데이터 복원
     const handleResetMockData = () => {
         setDestinationList(MOCK_RESULTS);
@@ -188,6 +209,35 @@ export function HomeScreen() {
         setSelectedIndex(0);
         syncStorage(MOCK_RESULTS, ['3']);
         triggerToast('샘플 목적지 3건이 복원되었습니다.');
+    };
+
+    // 수동 정렬 모드일 때 ▲/▼ 순서 이동
+    const handleMoveOrder = (index: number, direction: 'up' | 'down') => {
+        const targetIndex = direction === 'up' ? index - 1 : index + 1;
+        if (targetIndex < 0 || targetIndex >= destinationList.length) return;
+
+        const nextList = [...destinationList];
+        const [moved] = nextList.splice(index, 1);
+        nextList.splice(targetIndex, 0, moved);
+
+        setDestinationList(nextList);
+        setSelectedIndex(targetIndex);
+        syncStorage(nextList, savedIds);
+    };
+
+    // 보관함에서 오늘 동선에 담기
+    const handleAddFromSaved = (item: AddressItem) => {
+        const cloned: AddressItem = {
+            ...item,
+            id: `today_${Date.now()}`,
+            isCompleted: false,
+        };
+        const nextList = [cloned, ...destinationList];
+        setDestinationList(nextList);
+        setActiveTab('all');
+        setSelectedIndex(0);
+        syncStorage(nextList, savedIds);
+        triggerToast(`'${item.title}' 오늘 동선에 추가됨`);
     };
 
     // 현장 메모 수정/추가 저장 + 영구 저장
@@ -244,11 +294,12 @@ export function HomeScreen() {
             triggerToast('안내할 목적지가 없습니다.');
             return;
         }
+        setActiveTab('all');
         setIsDrivingMode(true);
         setSelectedIndex(0);
     };
 
-    // 2단계: 도착 완료 클릭 시 하단 이동 + 다음 카드 자동 오픈 + 영구 저장
+    // 2단계: 도착 완료 클릭 시 하단 이동 + 모두 완료 시 처음 화면으로 자동 복귀
     const handleCompleteDestination = (id: string) => {
         const updated = destinationList.map((item) =>
             item.id === id ? { ...item, isCompleted: true } : item
@@ -258,10 +309,19 @@ export function HomeScreen() {
             ...updated.filter((item) => item.isCompleted),
         ];
 
+        const remaining = nextList.filter((item) => !item.isCompleted).length;
+
         setDestinationList(nextList);
-        setSelectedIndex(0);
         syncStorage(nextList, savedIds);
-        triggerToast('🎉 도착 완료! 다음 목적지를 안내합니다.');
+
+        if (remaining === 0) {
+            setIsDrivingMode(false);
+            setSelectedIndex(null);
+            triggerToast('🏁 모든 목적지 방문을 완료했습니다!');
+        } else {
+            setSelectedIndex(0);
+            triggerToast('🎉 도착 완료! 다음 목적지를 안내합니다.');
+        }
     };
 
     // 주소 추출 핸들러 + 영구 저장
@@ -280,6 +340,7 @@ export function HomeScreen() {
 
                 setDestinationList(nextList);
                 setSelectedIndex(0);
+                setText('');
                 syncStorage(nextList, savedIds);
                 triggerToast(`[추출 결과] ::: ${filterResult.title}`);
             } else {
@@ -294,7 +355,7 @@ export function HomeScreen() {
 
     const filteredResults = destinationList
         .filter((item) => {
-            if (activeTab === 'saved') return savedIds.includes(item.id);
+            if (!isDrivingMode && activeTab === 'saved') return savedIds.includes(item.id);
             return true;
         })
         .sort((a, b) => {
@@ -312,9 +373,12 @@ export function HomeScreen() {
             {/* 2단계 상단 주행 상태 바 */}
             {isDrivingMode && (
                 <View style={styles.drivingTopBar}>
-                    <Text style={styles.drivingStatusText}>
-                        🟢 주행 중 ({Math.min(completedCount + 1, destinationList.length)} / {destinationList.length}번째 목적지)
-                    </Text>
+                    <View>
+                        <Text style={styles.drivingStatusText}>
+                            🟢 주행 중 ({Math.min(completedCount + 1, destinationList.length)} / {destinationList.length}번째 목적지)
+                        </Text>
+                        <Text style={styles.drivingHintText}>노선 변경 시 다른 목적지 카드를 터치하세요</Text>
+                    </View>
                     <TouchableOpacity
                         style={styles.backToSetupBtn}
                         onPress={() => setIsDrivingMode(false)}
@@ -397,7 +461,7 @@ export function HomeScreen() {
                                 <View>
                                     <Text style={styles.sortTitle}>📍 내 위치 기준 실시간 거리 정렬</Text>
                                     <Text style={styles.sortSub}>
-                                        {isAutoSort ? '현재 위치에서 가까운 순서로 자동 정렬 중' : '고정 순서 모드'}
+                                        {isAutoSort ? '가까운 순서로 자동 정렬 중' : '수동 순서 모드 (카드 우측 ▲▼ 이동)'}
                                     </Text>
                                 </View>
                                 <Switch
@@ -408,17 +472,29 @@ export function HomeScreen() {
                                 />
                             </View>
 
-                            <View style={styles.tabRow}>
-                                <TouchableOpacity onPress={() => setActiveTab('all')}>
-                                    <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
-                                        목적지 {destinationList.length}
-                                    </Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setActiveTab('saved')}>
-                                    <Text style={[styles.tabText, activeTab === 'saved' && styles.tabTextActive]}>
-                                        보관함 {savedIds.length}
-                                    </Text>
-                                </TouchableOpacity>
+                            <View style={styles.tabHeaderRow}>
+                                <View style={styles.tabRow}>
+                                    <TouchableOpacity onPress={() => setActiveTab('all')}>
+                                        <Text style={[styles.tabText, activeTab === 'all' && styles.tabTextActive]}>
+                                            목적지 {destinationList.length}
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => setActiveTab('saved')}>
+                                        <Text style={[styles.tabText, activeTab === 'saved' && styles.tabTextActive]}>
+                                            보관함 {savedIds.length}
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                {activeTab === 'all' && destinationList.length > 0 && (
+                                    <TouchableOpacity
+                                        onPress={handleClearAllDestinations}
+                                        style={styles.clearAllBtn}
+                                        activeOpacity={0.7}
+                                    >
+                                        <Text style={styles.clearAllText}>전체 비우기</Text>
+                                    </TouchableOpacity>
+                                )}
                             </View>
                         </>
                     )}
@@ -427,7 +503,9 @@ export function HomeScreen() {
                     <View style={styles.resultList}>
                         {filteredResults.length === 0 ? (
                             <View style={styles.emptyState}>
-                                <Text style={styles.emptyText}>저장된 목적지가 없습니다.</Text>
+                                <Text style={styles.emptyText}>
+                                    {activeTab === 'saved' ? '보관함에 저장된 장소가 없습니다.' : '저장된 목적지가 없습니다.'}
+                                </Text>
                                 {activeTab === 'all' && (
                                     <TouchableOpacity
                                         onPress={handleResetMockData}
@@ -440,10 +518,7 @@ export function HomeScreen() {
                             </View>
                         ) : (
                             filteredResults.map((item, index) => {
-                                const firstUncompletedId = filteredResults.find((i) => !i.isCompleted)?.id;
-                                const isSelected = isDrivingMode
-                                    ? item.id === firstUncompletedId
-                                    : selectedIndex === index;
+                                const isSelected = selectedIndex === index;
                                 const isSaved = savedIds.includes(item.id);
 
                                 return (
@@ -451,15 +526,27 @@ export function HomeScreen() {
                                         key={item.id}
                                         item={item}
                                         orderNumber={index + 1}
+                                        totalCount={filteredResults.length}
                                         isSelected={isSelected}
                                         isSaved={isSaved}
                                         isDrivingMode={isDrivingMode}
+                                        isAutoSort={isAutoSort}
+                                        isSavedTab={activeTab === 'saved'}
                                         onSelect={() => {
-                                            if (!isDrivingMode) setSelectedIndex(isSelected ? null : index);
+                                            if (isDrivingMode) {
+                                                if (!item.isCompleted && selectedIndex !== index) {
+                                                    setSelectedIndex(index);
+                                                    triggerToast(`'${item.title}'(으)로 목적지 변경`);
+                                                }
+                                            } else {
+                                                setSelectedIndex(isSelected ? null : index);
+                                            }
                                         }}
                                         onToggleSave={handleToggleSave}
                                         onDelete={handleDeleteDestination}
                                         onUpdateMemo={handleUpdateMemo}
+                                        onMoveOrder={handleMoveOrder}
+                                        onAddFromSaved={handleAddFromSaved}
                                         onAddWaypoint={handleAddWaypoint}
                                         onComplete={handleCompleteDestination}
                                     />
@@ -474,7 +561,7 @@ export function HomeScreen() {
             </ScrollView>
 
             {/* 1단계 하단 고정 주행 시작 액션 바 */}
-            {!isDrivingMode && remainingCount > 0 && (
+            {!isDrivingMode && activeTab === 'all' && remainingCount > 0 && (
                 <View style={styles.bottomFixedBar}>
                     <TouchableOpacity
                         style={styles.startDrivingBtn}
@@ -518,6 +605,11 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '800',
         color: '#059669',
+    },
+    drivingHintText: {
+        fontSize: 11,
+        color: '#64748B',
+        marginTop: 2,
     },
     backToSetupBtn: {
         backgroundColor: '#F1F5F9',
@@ -699,11 +791,16 @@ const styles = StyleSheet.create({
         color: '#64748B',
         marginTop: 2,
     },
+    tabHeaderRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+        paddingHorizontal: 4,
+    },
     tabRow: {
         flexDirection: 'row',
         gap: 16,
-        marginBottom: 12,
-        paddingHorizontal: 4,
     },
     tabText: {
         fontSize: 14,
@@ -713,6 +810,17 @@ const styles = StyleSheet.create({
     tabTextActive: {
         color: '#0F172A',
         fontWeight: '800',
+    },
+    clearAllBtn: {
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        borderRadius: 6,
+        backgroundColor: '#E2E8F0',
+    },
+    clearAllText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#475569',
     },
     resultList: {
         gap: 12,

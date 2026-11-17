@@ -1,5 +1,5 @@
 import React, { JSX, useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, StyleSheet, Linking, Alert } from 'react-native';
 import { styles } from '../../css/card';
 import { openNaverNavi, openTmapNavi, openKakaoNavi } from '../../module/navigation';
 
@@ -21,6 +21,7 @@ export interface AddressItem {
     placeName?: string;
     lat?: string;
     lon?: string;
+    phone?: string;
     distance?: string;
     distanceKm?: number;
     memo?: string;
@@ -35,13 +36,14 @@ export interface AddressItem {
 export interface SearchCardProps {
     item: AddressItem;
     orderNumber: number;
+    totalCount: number;
     isSelected: boolean;
-    isSaved: boolean;
     isDrivingMode: boolean;
+    isAutoSort: boolean;
     onSelect: () => void;
-    onToggleSave: (item: AddressItem) => void;
     onDelete?: (id: string) => void;
     onUpdateMemo?: (id: string, newMemo: string) => void;
+    onMoveOrder?: (index: number, direction: 'up' | 'down') => void;
     onAddWaypoint?: (facility: NearbyFacility, parentIndex: number) => void;
     onComplete?: (id: string) => void;
 }
@@ -50,22 +52,23 @@ export function SearchCard(props: SearchCardProps): JSX.Element {
     const {
         item,
         orderNumber,
+        totalCount,
         isSelected,
-        isSaved,
         isDrivingMode,
+        isAutoSort,
         onSelect,
-        onToggleSave,
         onDelete,
         onUpdateMemo,
+        onMoveOrder,
         onAddWaypoint,
         onComplete,
     } = props;
 
-    // 1단계 아코디언 패널 상태 ('none' | 'business' | 'nearby')
     const [activePanel, setActivePanel] = useState<'none' | 'business' | 'nearby'>('nearby');
     const [isEditingMemo, setIsEditingMemo] = useState(false);
     const [memoDraft, setMemoDraft] = useState(item.memo || '');
 
+    const currentIndex = orderNumber - 1;
     const isWithinRadius = item.distanceKm === undefined || item.distanceKm <= 0.15;
     const lockedLabel = `🔒 반경 150m 진입 시 완료 활성 (${item.distance || '이동중'})`;
 
@@ -89,6 +92,14 @@ export function SearchCard(props: SearchCardProps): JSX.Element {
         setActivePanel((prev) => (prev === target ? 'none' : target));
     };
 
+    const handleCallPhone = () => {
+        if (!item.phone) {
+            Alert.alert('안내', '등록된 전화번호가 없습니다.');
+            return;
+        }
+        Linking.openURL(`tel:${item.phone.replace(/[^0-9]/g, '')}`);
+    };
+
     return (
         <View
             style={[
@@ -109,7 +120,8 @@ export function SearchCard(props: SearchCardProps): JSX.Element {
                 {/* 상단 카드 헤더 */}
                 <TouchableOpacity
                     onPress={onSelect}
-                    activeOpacity={isDrivingMode ? 1 : 0.7}
+                    disabled={item.isCompleted}
+                    activeOpacity={0.7}
                     style={styles.cardHeaderArea}
                 >
                     <View style={styles.titleRow}>
@@ -123,6 +135,12 @@ export function SearchCard(props: SearchCardProps): JSX.Element {
                             {item.isWayPoint && (
                                 <View style={extraStyles.wayPointBadge}>
                                     <Text style={extraStyles.wayPointText}>경유</Text>
+                                </View>
+                            )}
+
+                            {isDrivingMode && isSelected && !item.isCompleted && (
+                                <View style={extraStyles.activeTargetBadge}>
+                                    <Text style={extraStyles.activeTargetText}>안내중</Text>
                                 </View>
                             )}
 
@@ -140,27 +158,39 @@ export function SearchCard(props: SearchCardProps): JSX.Element {
 
                         <View style={styles.rightGroup}>
                             {item.distance && <Text style={styles.distanceBadge}>{item.distance}</Text>}
-                            {!isDrivingMode && (
-                                <>
-                                    <TouchableOpacity
-                                        onPress={() => onToggleSave(item)}
-                                        activeOpacity={0.6}
-                                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
-                                    >
-                                        <Text style={[styles.starIcon, isSaved && styles.starIconActive]}>
-                                            {isSaved ? '★' : '☆'}
-                                        </Text>
-                                    </TouchableOpacity>
 
+                            {/* 1단계 + 수동 정렬 모드일 때 ▲/▼ 순서 이동 버튼 노출 */}
+                            {!isDrivingMode && !isAutoSort && !item.isCompleted && (
+                                <View style={extraStyles.orderMoveGroup}>
                                     <TouchableOpacity
-                                        onPress={() => onDelete?.(item.id)}
-                                        activeOpacity={0.6}
-                                        style={extraStyles.deleteIconBtn}
-                                        hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
+                                        onPress={() => onMoveOrder?.(currentIndex, 'up')}
+                                        disabled={currentIndex === 0}
+                                        style={[extraStyles.moveBtn, currentIndex === 0 && extraStyles.moveBtnDisabled]}
                                     >
-                                        <Text style={extraStyles.deleteIconText}>✕</Text>
+                                        <Text style={extraStyles.moveBtnText}>▲</Text>
                                     </TouchableOpacity>
-                                </>
+                                    <TouchableOpacity
+                                        onPress={() => onMoveOrder?.(currentIndex, 'down')}
+                                        disabled={currentIndex >= totalCount - 1}
+                                        style={[
+                                            extraStyles.moveBtn,
+                                            currentIndex >= totalCount - 1 && extraStyles.moveBtnDisabled,
+                                        ]}
+                                    >
+                                        <Text style={extraStyles.moveBtnText}>▼</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
+                            {!isDrivingMode && (
+                                <TouchableOpacity
+                                    onPress={() => onDelete?.(item.id)}
+                                    activeOpacity={0.6}
+                                    style={extraStyles.deleteIconBtn}
+                                    hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
+                                >
+                                    <Text style={extraStyles.deleteIconText}>✕</Text>
+                                </TouchableOpacity>
                             )}
                         </View>
                     </View>
@@ -172,7 +202,7 @@ export function SearchCard(props: SearchCardProps): JSX.Element {
                     </View>
                 </TouchableOpacity>
 
-                {/* 📝 현장 메모 영역 (1단계에서는 직접 수정/추가 가능, 2단계에서는 읽기 전용) */}
+                {/* 📝 현장 메모 영역 */}
                 <View style={extraStyles.memoSection}>
                     {isEditingMemo && !isDrivingMode ? (
                         <View style={extraStyles.memoEditBox}>
@@ -220,7 +250,7 @@ export function SearchCard(props: SearchCardProps): JSX.Element {
                 {isSelected && !isDrivingMode && (
                     <View style={extraStyles.setupSection}>
                         <View style={extraStyles.chipRow}>
-                            <TouchableOpacity style={extraStyles.chipBtn}>
+                            <TouchableOpacity style={extraStyles.chipBtn} onPress={handleCallPhone}>
                                 <Text style={extraStyles.chipText}>📞 전화</Text>
                             </TouchableOpacity>
 
@@ -324,9 +354,33 @@ export function SearchCard(props: SearchCardProps): JSX.Element {
                     </View>
                 )}
 
-                {/* [2단계: 주행 모드] 현재 1순위 카드에서만 도착 완료 & 3사 내비 버튼 노출 */}
+                {/* [2단계: 주행 모드] 선택된 활성 카드에서 현장 전화 + 도착 완료 + 3사 내비 버튼 노출 */}
                 {isSelected && isDrivingMode && !item.isCompleted && (
                     <View style={extraStyles.drivingSection}>
+                        <View style={extraStyles.drivingQuickRow}>
+                            <TouchableOpacity style={extraStyles.drivingCallBtn} onPress={handleCallPhone}>
+                                <Text style={extraStyles.drivingCallText}>
+                                    📞 {item.phone ? item.phone : '전화 걸기'}
+                                </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={extraStyles.drivingCallBtn}
+                                onPress={() => togglePanel('business')}
+                            >
+                                <Text style={extraStyles.drivingCallText}>
+                                    ℹ️ 영업시간 {activePanel === 'business' ? '▴' : '▾'}
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+
+                        {activePanel === 'business' && (
+                            <View style={extraStyles.infoBox}>
+                                <Text style={extraStyles.businessDetailText}>
+                                    🕒 {item.businessHours || '매일 10:00 - 22:00'}
+                                </Text>
+                            </View>
+                        )}
+
                         <TouchableOpacity
                             style={[
                                 extraStyles.completeBtn,
@@ -402,7 +456,38 @@ const extraStyles = StyleSheet.create({
         borderRadius: 4,
     },
     wayPointText: { fontSize: 10, fontWeight: '800', color: '#2563EB' },
+    activeTargetBadge: {
+        backgroundColor: '#ECFDF5',
+        borderWidth: 1,
+        borderColor: '#10B981',
+        paddingHorizontal: 5,
+        paddingVertical: 1,
+        borderRadius: 4,
+    },
+    activeTargetText: { fontSize: 10, fontWeight: '800', color: '#059669' },
     titleDone: { textDecorationLine: 'line-through', color: '#64748B' },
+    orderMoveGroup: {
+        flexDirection: 'row',
+        gap: 3,
+    },
+    moveBtn: {
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        backgroundColor: '#EFF6FF',
+        borderWidth: 1,
+        borderColor: '#BFDBFE',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    moveBtnDisabled: {
+        opacity: 0.35,
+    },
+    moveBtnText: {
+        fontSize: 9,
+        fontWeight: '800',
+        color: '#2563EB',
+    },
     deleteIconBtn: {
         width: 22,
         height: 22,
@@ -547,6 +632,24 @@ const extraStyles = StyleSheet.create({
         borderTopWidth: 1,
         borderTopColor: '#F1F5F9',
         gap: 10,
+    },
+    drivingQuickRow: {
+        flexDirection: 'row',
+        gap: 8,
+    },
+    drivingCallBtn: {
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingVertical: 7,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    drivingCallText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#334155',
     },
     completeBtn: { paddingVertical: 11, borderRadius: 10, alignItems: 'center', borderWidth: 1.5 },
     completeBtnReady: { backgroundColor: '#ECFDF5', borderColor: '#10B981' },
