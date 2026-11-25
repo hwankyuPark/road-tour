@@ -38,12 +38,16 @@ export interface SearchCardProps {
     orderNumber: number;
     totalCount: number;
     isSelected: boolean;
+    isSaved: boolean;
     isDrivingMode: boolean;
     isAutoSort: boolean;
+    isSavedTab: boolean;
     onSelect: () => void;
+    onToggleSave?: (item: AddressItem) => void;
     onDelete?: (id: string) => void;
     onUpdateMemo?: (id: string, newMemo: string) => void;
     onMoveOrder?: (index: number, direction: 'up' | 'down') => void;
+    onAddFromSaved?: (item: AddressItem) => void;
     onAddWaypoint?: (facility: NearbyFacility, parentIndex: number) => void;
     onComplete?: (id: string) => void;
 }
